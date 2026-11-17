@@ -384,6 +384,8 @@ jobs:
             make "$@" -j$(nproc) V=s 2>&1 | tee "$GITHUB_WORKSPACE/build-reports/preflight-$NAME.log"
           }
           run_make tools-compile tools/compile
+          # tools 就绪后立即验证 sing-box 解包与 libcronet 补丁应用，避免等数十分钟才暴露补丁格式错误。
+          run_make sing-box-prepare package/sing-box/prepare
           run_make toolchain-compile toolchain/compile
           run_make target-compile target/compile
 
