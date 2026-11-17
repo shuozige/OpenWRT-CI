@@ -196,6 +196,32 @@ if [[ "${WRT_CONFIG:-}" == S20P* ]]; then
 	fi
 fi
 
+# luci-app-openclash 启用 INCLUDE_CORE 时，Build/Compile 在 include/package.mk 中会经过
+# $(eval $(call Build/DefaultTargets,...)) 与配方两轮展开；上游只写了 $$CORE_ARCH，
+# 展开后会丢失 $C 变成 ORE_ARCH 导致下载 Meta Core 404。补成 $$$$CORE_ARCH。
+OPENCLASH_MAKE="$PACKAGE_PATH/luci-app-openclash/Makefile"
+if [ -f "$OPENCLASH_MAKE" ] && grep -q 'CORE_ARCH' "$OPENCLASH_MAKE"; then
+	if grep -qE '(^|[^$])\$\$CORE_ARCH' "$OPENCLASH_MAKE"; then
+		FIX "openclash-core-arch-escape" "$PACKAGE_PATH/luci-app-openclash" sed -i -E \
+			's/(^|[^$])\$\$CORE_ARCH/\1$$$$CORE_ARCH/g' \
+			"$OPENCLASH_MAKE"
+	fi
+fi
+if [[ "${WRT_CONFIG:-}" == S20P* ]]; then
+	if [ ! -f "$OPENCLASH_MAKE" ]; then
+		echo "required S20P OpenClash Makefile missing: $OPENCLASH_MAKE"
+		exit 1
+	fi
+	if grep -qE '(^|[^$])\$\$CORE_ARCH' "$OPENCLASH_MAKE"; then
+		echo "OpenClash CORE_ARCH double-dollar escape assertion failed: $OPENCLASH_MAKE"
+		exit 1
+	fi
+	if ! grep -qF '$$$$CORE_ARCH' "$OPENCLASH_MAKE"; then
+		echo "OpenClash CORE_ARCH quadruple-dollar assertion failed: $OPENCLASH_MAKE"
+		exit 1
+	fi
+fi
+
 # nps-openwrt 当前 main 将预编译包版本占位为 null；这会生成无效下载/打包元数据。
 # 固定到官方最新发布，并同步 S20P aarch64 的 client/server 校验值。
 NPS_VERSION="0.35.3"
