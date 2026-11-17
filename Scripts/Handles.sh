@@ -61,7 +61,7 @@ if [ -f "$SING_BOX_MAKE" ] && grep -q '^  GO_PKG_TAGS:=' "$SING_BOX_MAKE" && ! g
 		'/^GO_PKG_LDFLAGS_X:=/i GO_PKG_LDFLAGS:=-checklinkname=0' \
 		"$SING_BOX_MAKE"
 	FIX "sing-box-naive-tag" "$SING_BOX_DIR" sed -i \
-		's|^  GO_PKG_TAGS:=.*|&,with_naive_outbound|' \
+		'/^ifeq (\$(BUILD_VARIANT),full)$/,/^else$/ s|^  GO_PKG_TAGS:=[^\\]*$|&,with_naive_outbound|' \
 		"$SING_BOX_MAKE"
 	if ! grep -q 'TARGET_LDFLAGS += -lcronet' "$SING_BOX_MAKE"; then
 		# 以完整三行条件块插入，避免 sed 多次插入导致孤立 endif 使 Makefile 无法注册包。
@@ -271,6 +271,10 @@ if [[ "${WRT_CONFIG:-}" == S20P* ]]; then
 	done
 	if [ ! -f "$SING_BOX_PATCH" ] || [ "$(wc -l < "$SING_BOX_PATCH")" -ne 10 ] || ! grep -qF '"github.com/sagernet/sing-box/common/dialer"' "$SING_BOX_PATCH"; then
 		echo "S20P sing-box libcronet patch assertion failed: $SING_BOX_PATCH"
+		exit 1
+	fi
+	if ! grep -qF '$(strip \' "$SING_BOX_MAKE"; then
+		echo "S20P sing-box tiny GO_PKG_TAGS continuation assertion failed: $SING_BOX_MAKE"
 		exit 1
 	fi
 fi
