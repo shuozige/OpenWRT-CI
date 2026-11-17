@@ -178,6 +178,24 @@ if [[ "${WRT_CONFIG:-}" == S20P* ]]; then
 	fi
 fi
 
+# ImmortalWrt 的 upx/host 安装到 STAGING_DIR_HOSTPKG/bin/upx（staging_dir/hostpkg/bin/upx），
+# 而非 STAGING_DIR_HOST/bin/upx；不修正会导致 mihomo 在 Build/Install 阶段 Error 127。
+if [ -f "$MIHOMO_MAKE" ] && grep -qF '$(STAGING_DIR_HOST)/bin/upx' "$MIHOMO_MAKE"; then
+	FIX "mihomo-upx-hostpkg-path" "$PACKAGE_PATH/mihomo" sed -i \
+		's|[$](STAGING_DIR_HOST)/bin/upx|$(STAGING_DIR_HOSTPKG)/bin/upx|g' \
+		"$MIHOMO_MAKE"
+fi
+if [[ "${WRT_CONFIG:-}" == S20P* ]]; then
+	if grep -qF '$(STAGING_DIR_HOST)/bin/upx' "$MIHOMO_MAKE"; then
+		echo "mihomo S20P UPX path assertion failed: still references STAGING_DIR_HOST"
+		exit 1
+	fi
+	if ! grep -qF '$(STAGING_DIR_HOSTPKG)/bin/upx' "$MIHOMO_MAKE"; then
+		echo "mihomo S20P UPX path assertion failed: missing STAGING_DIR_HOSTPKG"
+		exit 1
+	fi
+fi
+
 # nps-openwrt 当前 main 将预编译包版本占位为 null；这会生成无效下载/打包元数据。
 # 固定到官方最新发布，并同步 S20P aarch64 的 client/server 校验值。
 NPS_VERSION="0.35.3"
