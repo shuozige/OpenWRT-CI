@@ -53,7 +53,7 @@ if [ ! -f "$SING_BOX_MAKE" ] && [ -f "$FEEDS_PATH/base/sing-box/Makefile" ]; the
 	SING_BOX_DIR="$FEEDS_PATH/base/sing-box"
 	SING_BOX_MAKE="$SING_BOX_DIR/Makefile"
 fi
-if [ -f "$SING_BOX_MAKE" ] && grep -q '^  GO_PKG_TAGS:=http2legacy,' "$SING_BOX_MAKE" && ! grep -q 'with_naive_outbound' "$SING_BOX_MAKE"; then
+if [ -f "$SING_BOX_MAKE" ] && grep -q '^  GO_PKG_TAGS:=' "$SING_BOX_MAKE" && ! grep -q 'with_naive_outbound' "$SING_BOX_MAKE"; then
 	FIX "sing-box-naive-dep" "$SING_BOX_DIR" sed -i \
 		's|^  DEPENDS+= +kmod-netlink-diag +kmod-tun$|  DEPENDS+= +kmod-netlink-diag +kmod-tun +libcronet|' \
 		"$SING_BOX_MAKE"
@@ -61,7 +61,7 @@ if [ -f "$SING_BOX_MAKE" ] && grep -q '^  GO_PKG_TAGS:=http2legacy,' "$SING_BOX_
 		'/^GO_PKG_LDFLAGS_X:=/i GO_PKG_LDFLAGS:=-checklinkname=0' \
 		"$SING_BOX_MAKE"
 	FIX "sing-box-naive-tag" "$SING_BOX_DIR" sed -i \
-		's|^  GO_PKG_TAGS:=http2legacy,with_acme,with_clash_api,with_dhcp,with_gvisor,with_quic,with_tailscale,with_utls,with_wireguard$|  GO_PKG_TAGS:=http2legacy,with_acme,with_clash_api,with_dhcp,with_gvisor,with_naive_outbound,with_quic,with_tailscale,with_utls,with_wireguard|' \
+		's|^  GO_PKG_TAGS:=.*|&,with_naive_outbound|' \
 		"$SING_BOX_MAKE"
 	if ! grep -q 'TARGET_LDFLAGS += -lcronet' "$SING_BOX_MAKE"; then
 		# 以完整三行条件块插入，避免 sed 多次插入导致孤立 endif 使 Makefile 无法注册包。
@@ -71,16 +71,18 @@ ifneq ($(findstring with_naive_outbound,$(GO_PKG_TAGS)),)\
 endif' "$SING_BOX_MAKE"
 	fi
 	mkdir -p "$SING_BOX_DIR/patches"
-	if [ ! -f "$SING_BOX_DIR/patches/100-use-system-libcronet.patch" ]; then
-		printf '%s\n' \
-			'--- a/protocol/naive/outbound.go' \
-			'+++ b/protocol/naive/outbound.go' \
-			'@@ -9,7 +9,6 @@ import (' \
-			$'\t"github.com/sagernet/cronet-go"' \
-			$'-\t_ "github.com/sagernet/cronet-go/all"' \
-			$'\t"github.com/sagernet/sing-box/adapter"' \
-			> "$SING_BOX_DIR/patches/100-use-system-libcronet.patch"
-	fi
+	printf '%s\n' \
+		'--- a/protocol/naive/outbound.go' \
+		'+++ b/protocol/naive/outbound.go' \
+		'@@ -9,7 +9,6 @@ import (' \
+		$' \t"strings"' \
+		' ' \
+		$' \t"github.com/sagernet/cronet-go"' \
+		$'-\t_ "github.com/sagernet/cronet-go/all"' \
+		$' \t"github.com/sagernet/sing-box/adapter"' \
+		$' \t"github.com/sagernet/sing-box/adapter/outbound"' \
+		$' \t"github.com/sagernet/sing-box/common/dialer"' \
+		> "$SING_BOX_DIR/patches/100-use-system-libcronet.patch"
 fi
 # OpenAppFilter：Linux 6.18 将 del_timer_sync() 更名为 timer_delete_sync()。
 # 同时补入 timer.h，并递归处理实际复制后的源码路径。
@@ -260,5 +262,16 @@ if [[ "${WRT_CONFIG:-}" == S20P* ]]; then
 			exit 1
 		fi
 	done
+	SING_BOX_PATCH="$SING_BOX_DIR/patches/100-use-system-libcronet.patch"
+	for NEED in '+libcronet' 'with_naive_outbound' 'GO_PKG_LDFLAGS:=-checklinkname=0' 'TARGET_LDFLAGS += -lcronet'; do
+		if [ ! -f "$SING_BOX_MAKE" ] || ! grep -qF "$NEED" "$SING_BOX_MAKE"; then
+			echo "S20P sing-box Makefile assertion failed: missing $NEED"
+			exit 1
+		fi
+	done
+	if [ ! -f "$SING_BOX_PATCH" ] || [ "$(wc -l < "$SING_BOX_PATCH")" -ne 10 ] || ! grep -qF '"github.com/sagernet/sing-box/common/dialer"' "$SING_BOX_PATCH"; then
+		echo "S20P sing-box libcronet patch assertion failed: $SING_BOX_PATCH"
+		exit 1
+	fi
 fi
 
